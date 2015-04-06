@@ -1,0 +1,195 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+
+
+\newcommand{\ie}{{\em i.e., }}
+\newcommand{\eg}{{\em e.g., }}
+\newcommand{\etal}{{\em et al. }}
+\newcommand{\etc}{{\em etc.}}
+\newcommand{\mind}{{\hspace{0.6cm}}}
+\newcommand{\argmin}{\operatornamewithlimits{argmin}}
+\newcommand{\argmax}{\operatornamewithlimits{argmax}}
+
+\begin{document}
+
+%
+%Your submission should include a README file with:
+%- Description of your approach, methodology, and experimentation
+%   process to improve the classification accuracy. 
+%- Guidelines on how to run your code.
+%- Instructions to install any special packages or tools required by your code.
+
+
+\section{Readme}
+
+\subsection{Methodology}
+The problem is to classify the category of a new book based on labeled books. 
+The first file ``input1.txt'' contains two types of features author and title.
+According to the training part data , there are 270 books, 476 authors scatter on 9 categories.
+The average books published by each author is less than 1.
+Intuitively, if an author published a book in category A, it is more likely his new book will also belong to the same category if he has new publications.
+However, the statistic shows only few authors will publish more than one books.
+So, the author may not be the dominated factor to decide whether a book belongs to a category.
+
+The second feature is title.
+So, this problem is similar to a text classify problem.
+In general, there are two kinds of approaches: discriminative model and generative model.
+This program selects generative model and uses navie bayes to do the classification.
+
+The Navie Bayes method for text classification has been studied in \cite{Murphy2006} and \cite{Manning2008IIR}.
+Name the random variable $y$ for the category, and $x=(x_1 \cdots x_{|D|})$ for the $D$ dimensional features.
+The classify is to find $\hat{y}$ to have max posterior probability $P(y|x)$.
+According to Bayes rule:
+
+\begin{align}
+\hat{y}&=\argmax_y P(y|x) \\
+       &=\argmax_y \frac{P(x|y)P(y)}{P(x)}\\
+       &=\argmax_y P(x|y)P(y)
+\end{align}
+
+The reason it is called Navie Bayes is because the method assumes the features are independent such that
+\begin{equation}
+P(x|y) =P((x_1 \cdots x_{|D|})|y)
+       =\prod_{1 \leq i \leq |D|} P(x_i|y)
+\end{equation}
+thus
+\begin{align}
+\hat{y}&=\argmax_y \log [\prod_{1 \leq i \leq |D|} P(x_i|y)P(y)] \\
+	   &=\argmax_y [\log P(y) + \sum\limits_{1 \leq i \leq |D|} \log P(x_i|y)]
+\end{align}
+
+Even though this assumption is false, it makes model easy to fit and works well in practice \cite{Murphy2006}.
+So the question changes to find the prior probability $P(y)$ and conditional probability $P(x_i|y)$.
+
+Given the categories are defined by $C$, assume $y$ follows the multinomial distribution, then $P(y=c)$ can derived by the max likelihood estimation, such that:
+
+\begin{equation}
+P(y=c)_{MLE} = \frac{N_c}{N}
+\end{equation}
+where $N_c$ is the number of books belong to category $c$, and $N$ is the total number of books.
+
+To derive $P(x_i|y)$, we make another assumption that the positions of each words are independent.
+This assumption breaks the order of words and treat the document as a bag of words, and $x$ is also treated as a multinomial random variable.
+Name $T$ for the words set, and $|D|=|T|$.
+
+\begin{equation}
+\label{eq:Ntc}
+P(x_i=t|y=c)_{MLE}=\frac{N_{tc}}{\sum\limits_{t' \in T} N_{t'c}}
+\end{equation}
+where $N_{tc}$ is the times the word $t$ appears in the books of category $c$.
+
+To deal with the case where $N_{tc}=0$, \ref{eq:Ntc} is updated as:
+\begin{equation}
+\label{eq:NtcM}
+P(x_i=t|y=c)_{MLE}=\frac{N_{tc}+1}{\sum\limits_{t' \in T} (N_{t'c}+1)}
+\end{equation}
+
+The author information is treated as the text word and processed in the same way.
+
+The algorithm is as follows:
+\begin{table}[htb]
+\centering
+%    \caption{Simulation parameters}
+%\scriptsize
+\begin{tabular}{l}
+\hline         
+\textbf{Algorithm } Book Classify \\ \hline \hline
+	 \bf{Train} \\
+	 $T$ $\leftarrow$ extract words from training books \\
+	 for $c$ in $C$  \\
+	   \mind for $t$ in $T$                          \\
+	     \mind \mind $N_{tc}$ $\leftarrow$ times word $t$ appears in books of category $c$  \\
+	 	 \mind \mind update $P(x_i=t|y=c)$ as Equation \ref{eq:NtcM} \\
+	 	 
+	 \bf{Test} \\
+	 for $c$ in $C$  \\
+	 	\mind $W$ $\leftarrow$ extract words from testing book \\
+	 	\mind $pr(c)=\log P(y=c)$ \\
+	 	\mind for $w$ in $W$ \\
+	 	\mind \mind $pr(c) += \log(P(x=t|y=c))$       \\
+	 return $\argmax_c pr(c)$  \\
+    \end{tabular}
+    \label{tab:alg}
+\end{table}
+
+\subsection{Improve Accuracy}
+The accuracy improvement focuses on feature selection, \ie which word should be included as feature.
+A trivial method is to filter \textit{preposition}, \textit{article} and other words which are commonly used and have no category preference, but it can not filter out all possible unrelated words.
+Manning \etal \cite{Manning2008IIR} discussed three methods of feature selection for text classification: 
+mutual information, Chi$^2$ and frequency based.
+
+This program utilizes the mutual information method.
+The mutual information (MI) evaluate how much information the presence/absence of the word will contribute the correct the classification, \ie, the correlation between word and category.
+
+Define random variable $e_c={0,1}, e_t={0,1}$ for the presence of book in category and word in book.
+\begin{equation}
+MI(t,c)=\sum\limits_{e_c}\sum\limits_{e_t} P(e_t, e_c) \log \frac{P(e_t, e_c)}{P(e_t)P(e_c)}
+\end{equation}
+where $P(e_t)$ is the probability of word $t$ appear in any category books; $P(e_c)$ is the probability of a book belongs to category $c$; $P(e_t, e_c)$ is the join probability of the presence of word $t$ and category $c$.
+For example, $P(e_t=1, e_c=1)$ is the probability word $t$ appears in category $c$'s books.
+Since both $e_c, e_t$ follows multinomial distribution, the probability can be estimated as:
+\begin{align} 
+P(e_t=1, e_c=1) = \frac{\#\mbox{books in category c contain t}}{\#\mbox{books in category c}} \nonumber \\
+P(e_c=1) = \frac{\#\mbox{books in category c}}{\#\mbox{books in all categories}} \nonumber
+\end{align}
+other cases can be developed similarly.
+
+Table \ref{tab:selWords} shows the top 10 MI words in each category.
+
+\begin{table}[htb]
+\centering
+    \caption{Individual Features Weight}
+\footnotesize
+\begin{tabular}{|c|c|c|c|c|}
+\hline   
+AMEH & BIOL & CS & CRIM & ENG \\ \hline \hline
+reconstruction & biology & files & criminal & writing  \\ \hline 
+civil & cell & programming & crime & reading \\ \hline
+revolution & dna & file & crimes & essay   \\ \hline
+west & cells & arrays & police & words  \\ \hline
+empire & gene & variable & court & sentence  \\ \hline
+america & proteins & software & investigation & revising  \\ \hline
+war & chromosomes & user & sentencing & write  \\ \hline
+south & molecular  & input & victims   & plagiarism   \\ \hline
+north & genetics  & operators & constitutional & punctuation  \\ \hline
+cold & endocrine  & converting & justice & narrative  \\ \hline \hline
+MANAG & MARKET & NURSE & SOCI &\\ \hline \hline
+management & marketing & nursing & social &\\ \hline 
+teams & pricing & clinical & sociology &\\ \hline
+managerial & sales &  practice & stratification & \\ \hline
+performance & buying & diagnostic & gender & \\ \hline
+resource & selling & nurses & inequality &\\ \hline
+leading & advertising  & care & poverty &\\ \hline
+organizational & markets & health & race & \\ \hline
+business & segmentation & therapeutic & family &\\ \hline
+contingency & consumer & assessment & experience &\\ \hline
+employees & product & diagnosis & sociological  &\\ \hline
+    \end{tabular}
+    \label{tab:selWords}
+    \vspace*{-12pt}
+\end{table}
+
+\subsection{Experiment}
+
+\subsubsection{input1}
+To scale to big data input, a database version program is developed to store relevant tables in MySQL (A non-database version program is also developed which stores all information in memory).
+
+
+
+\subsubsection{input1\&2}
+
+
+
+
+\subsection{How to run}
+
+
+
+\bibliographystyle{plain}
+\bibliography{textClassify}
+
+\end{document}
